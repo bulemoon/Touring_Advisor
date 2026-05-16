@@ -24,9 +24,9 @@
         v-for="tour in filteredTours"
         :key="tour.id"
         class="tour-card"
-        @click="selectedTour = tour"
+        @click="handleSelectTour(tour)"
       >
-        <div class="tour-card-media" :style="{ background: bgColors[tour.id % bgColors.length] }">
+        <div class="tour-card-media" :style="{ backgroundImage: cardCover(tour.cover_url, tour.id) }">
           <div class="tour-card-chip">礼宾推荐</div>
         </div>
         <div class="tour-card-body">
@@ -59,6 +59,7 @@ import { computed, ref, watch } from "vue"
 import BottomSheet from "./BottomSheet.vue"
 
 const props = defineProps<{ lat: number; lng: number }>()
+const emit = defineEmits<{ "select-tour": [tourId: number | null] }>()
 const API = () => window.CONFIG?.API_BASE_URL || ""
 
 const tabs = [
@@ -70,28 +71,40 @@ const tabs = [
 const activeTab = ref("half-day")
 const selectedTour = ref<any>(null)
 const allTours = ref<any[]>([])
-const loading = ref(false)
 
-const bgColors = ["#6f5631", "#4b4337", "#61472d", "#3e352d", "#765b33"]
+const bgColors = [
+  "linear-gradient(135deg, #6f5631, #392b1d)",
+  "linear-gradient(135deg, #4b4337, #241f1b)",
+  "linear-gradient(135deg, #61472d, #2d2015)",
+  "linear-gradient(135deg, #3e352d, #191411)",
+  "linear-gradient(135deg, #765b33, #2d2010)",
+]
 
 const filteredTours = computed(() => allTours.value.filter((t) => t.duration === activeTab.value))
 
 async function fetchTours() {
-  loading.value = true
   try {
     const res = await fetch(`${API()}/api/tours?lat=${props.lat}&lng=${props.lng}`)
     allTours.value = await res.json()
   } catch {
     allTours.value = []
   }
-  loading.value = false
 }
 
 watch(() => [props.lat, props.lng], fetchTours, { immediate: true })
 
+watch(filteredTours, (tours) => {
+  emit("select-tour", tours[0]?.id ?? null)
+}, { immediate: true })
+
+function handleSelectTour(tour: any) {
+  selectedTour.value = tour
+  emit("select-tour", tour.id)
+}
+
 function handleFavorite() {
   if (selectedTour.value) {
-    selectedTour.value.favorites_count++
+    selectedTour.value.favorites_count += 1
   }
 }
 
@@ -100,6 +113,12 @@ function durationLabel(duration: string) {
   if (duration === "1-day") return "建议 1 天"
   if (duration === "3-day") return "建议 3 天"
   return "灵活安排行程"
+}
+
+function cardCover(coverUrl: string, id: number) {
+  const fallback = bgColors[id % bgColors.length]
+  if (!coverUrl) return fallback
+  return `linear-gradient(180deg, rgba(24,18,14,.08), rgba(24,18,14,.56)), url(${coverUrl})`
 }
 </script>
 

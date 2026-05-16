@@ -5,20 +5,16 @@
         <div class="brand-kicker">TOURING ADVISOR</div>
         <div class="logo">高端旅居顾问</div>
       </div>
-      <img
-        class="avatar-btn"
-        src="https://via.placeholder.com/36"
-        @click="showDrawer = true"
-      />
+      <img class="avatar-btn" src="https://via.placeholder.com/36" @click="showDrawer = true" />
     </header>
 
     <MapArea @located="onLocated" />
 
     <ChatSection :lat="lat" :lng="lng" />
 
-    <TourSection :lat="lat" :lng="lng" />
+    <TourSection :lat="lat" :lng="lng" @select-tour="selectedTourId = $event" />
 
-    <ShoppingSection :lat="lat" :lng="lng" />
+    <ShoppingSection :lat="lat" :lng="lng" :selected-tour-id="selectedTourId" />
 
     <AuthOverlay :visible="auth.showLogin" />
 
@@ -40,6 +36,7 @@ const auth = useAuthStore()
 const showDrawer = ref(false)
 const lat = ref(39.9042)
 const lng = ref(116.4074)
+const selectedTourId = ref<number | null>(null)
 
 function onLocated(l: number, n: number) {
   lat.value = l
