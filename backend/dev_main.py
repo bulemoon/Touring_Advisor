@@ -866,62 +866,38 @@ def _generate_recommendation(session: dict) -> dict:
     else:
         spot_guide = "安排每日行程（每天3-4个景点），按天分列，标注每段交通方式"
 
-    system = (
+    # 读取模板文件
+    try:
+        prompt_template = (DIALOG_DIR / "prompt.md").read_text(encoding="utf-8")
+    except Exception:
+        prompt_template = ""
+    try:
+        output_template = (DIALOG_DIR / "output.md").read_text(encoding="utf-8")
+    except Exception:
+        output_template = ""
+
+    # System prompt 是模板的第一段（到第一个 ## 之前）
+    system = prompt_template.split("##")[0].strip() if prompt_template else (
         "你是一个潮流的 AI 旅伴助手，为年轻人设计个性化旅行方案。"
         "你的风格：有趣、接地气、知道年轻人的痛点（拍照好看、性价比高、小众不踩雷）。"
         "回复要详细但不过长，用口语化风格。"
     )
-    user = f"""
-## 用户行程需求
-- **目的地**：{dest}
-- **出发日期**：{date}
-- **居住位置**：{residence}
-- **行程时长**：{duration_label}
 
-## 目的地天气
-{weather_summary}
+    # User prompt = prompt 模板的变量部分 + output 模板
+    user = prompt_template.replace(system, "").strip() if prompt_template else ""
+    user = user.replace("{dest}", dest)
+    user = user.replace("{date}", date)
+    user = user.replace("{residence}", residence)
+    user = user.replace("{duration_label}", duration_label)
+    user = user.replace("{weather_summary}", weather_summary)
+    user = user.replace("{poi_text}", poi_text)
+    user = user.replace("{shopping_text}", shopping_text)
+    user = user.replace("{zhihu_text}", zhihu_text)
+    user = user.replace("{gear_text}", gear_text)
+    user = user.replace("{spot_guide}", spot_guide)
 
-## 周边POI（高德地图）
-{poi_text}
-
-## 周边购物地点
-{shopping_text}
-
-## 知乎攻略
-{zhihu_text}
-
-## 装备建议（根据天气）
-{gear_text}
-
-## 要求
-请综合以上信息，生成一份完整的旅行推荐。格式如下：
-
-### 🌤️ 天气情况
-- 目的地、日期、天气状况、温度范围
-- 紫外线指数、风力等级
-- 1-2 句穿衣/出行建议
-
-### 📍 行程概览
-1-2 句总结
-
-### 🗺️ 推荐景点
-{spot_guide}
-每个景点包含：名称、建议停留时间、一句话推荐语
-
-### 🎒 装备清单
-整理装备建议为清晰列表
-
-### 🛍️ 周边购物推荐
-针对每个购物地点，包含：
-- 店铺名称、地址
-- 推荐购买的商品及一句话推荐理由
-- 适合什么时候去（顺路/专程）
-
-### 💡 小贴士
-2-3 条实用建议（交通、吃饭、拍照等）
-
-注意：整体风格要贴近年轻人，不要写得太官方。
-"""
+    # 拼接 output 模板
+    user += "\n\n" + output_template.replace("{spot_guide}", spot_guide)
 
     full_reply = call_deepseek(system, user)
     if not full_reply:
