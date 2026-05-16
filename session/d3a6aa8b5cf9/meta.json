@@ -1,0 +1,17 @@
+{
+  "id": "d3a6aa8b5cf9",
+  "state": "collecting",
+  "step": 1,
+  "inputs": {
+    "destination": "测试0",
+    "date": null,
+    "residence": null,
+    "duration": null
+  },
+  "created_at": "2026-05-16T17:54:21.081786",
+  "destination_coords": null,
+  "weather": null,
+  "gear": null,
+  "zhihu": null,
+  "summary": null
+}

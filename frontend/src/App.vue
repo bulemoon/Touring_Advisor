@@ -12,7 +12,7 @@
 
     <ChatSection :lat="lat" :lng="lng" />
 
-    <TourSection :lat="lat" :lng="lng" @select-tour="selectedTourId = $event" />
+    <!-- <TourSection :lat="lat" :lng="lng" @select-tour="selectedTourId = $event" /> -->
 
     <ShoppingSection :lat="lat" :lng="lng" :selected-tour-id="selectedTourId" />
 
@@ -27,7 +27,7 @@ import { ref } from "vue"
 import { useAuthStore } from "./stores/auth"
 import MapArea from "./components/MapArea.vue"
 import ChatSection from "./components/ChatSection.vue"
-import TourSection from "./components/TourSection.vue"
+// import TourSection from "./components/TourSection.vue"
 import ShoppingSection from "./components/ShoppingSection.vue"
 import AuthOverlay from "./components/AuthOverlay.vue"
 import UserDrawer from "./components/UserDrawer.vue"

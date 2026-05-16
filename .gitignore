@@ -29,5 +29,14 @@ build/
 # Railway
 .railway/
 
+# Session 运行时数据（可选排除）
+# session/*/
+# session/*.json
+
+# Dialog 运行时输出（可选排除）
+# dialog/*_prompt.md
+# dialog/*.md
+# !dialog/prompt.md
+
 # 日志
 *.log
