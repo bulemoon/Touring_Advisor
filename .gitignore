@@ -8,6 +8,7 @@ frontend/node_modules/
 
 # OpenSpec
 openspec/
+.opencode/
 
 # Python
 __pycache__/
