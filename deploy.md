@@ -14,8 +14,8 @@
 | 和风天气 | 天气查询 | dev.qweather.com | QWEATHER_API_KEY | ⏳ 待申请 |
 | Kimi (Moonshot AI) | Agent 基座 LLM | platform.moonshot.cn | KIMI_API_KEY | ✅ 已配置 |
 | 高德地图 Web 服务 | 后端 POI 搜索 | lbs.amap.com | AMAP_SERVER_KEY | ✅ 已配置 |
-| 高德地图 Web JS | 前端底图加载 | lbs.amap.com | 写入 frontend/config.js | ✅ 已配置 |
-| Railway | 后端 + Redis | railway.com | OAuth 登录 | — |
+| 高德地图 Web JS | 前端底图加载 | lbs.amap.com | 写入 frontend/public/config.js | ✅ 已配置 |
+| Railway | 后端 + Redis + PostgreSQL | railway.com | OAuth 登录 | — |
 | GitHub | 前端静态托管 | github.com | 仓库 Settings 开启 Pages | — |
 
 ### Key 申请步骤
@@ -63,10 +63,13 @@
 ## 四、GitHub Pages 前端部署
 
 1. 仓库 → Settings → Pages
-2. Branch: main，目录: /frontend
-3. 访问 
+2. Branch: main，目录: /frontend/dist（v2 改为 dist，因 Vue 构建产物在此）
+3. 构建：GitHub Actions 自动运行 `npm run build`，或本地构建后提交 dist/
+4. 访问 
 
-**frontend/config.js**（不提交 Git）
+**frontend/public/config.js**（不提交 Git，前端通过 window.CONFIG 读取）
+- API_BASE_URL：后端地址（本地 http://localhost:8000，Railway 为 Railway URL）
+- AMAP_JS_KEY：高德地图 Web JS Key
 
 
 ---

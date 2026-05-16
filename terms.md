@@ -18,3 +18,7 @@
 | Railway | Railway | PaaS 部署平台 | decisions.md |
 | 淘宝联盟 | Taobao Affiliate | 电商推广平台 | decisions.md |
 | coordtransform | coordtransform | Python 坐标转换库 | architecture.md |
+| WebSocket | WebSocket | 全双工通信协议，用于 AI 聊天 | design.md |
+| JWT | JSON Web Token | 无状态用户认证 Token | design.md |
+| Bottom Sheet | Bottom Sheet | 移动端底部弹出面板 UI 模式 | design.md |
+| PWA | Progressive Web App | 可离线、可安装的 Web 应用 | design.md |

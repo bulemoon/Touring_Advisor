@@ -2,6 +2,31 @@
 
 ---
 
+## ADR-010 — 新增：用户认证系统
+
+**日期**：2026-05-16  **状态**：已采纳
+
+### 决策
+引入用户系统（JWT + 手机号验证码），突破原 MVP "匿名无状态"约束。用户数据存储于 PostgreSQL。
+
+---
+
+## ADR-009 — 前端框架：Vue 3 + Vite
+
+**日期**：2026-05-16  **状态**：已采纳
+
+### 决策
+从 vanilla HTML/JS 迁移至 Vue 3 + Vite，支持 PWA、状态管理（Pinia）、组件化开发。构建产物输出至 `frontend/dist/`，GitHub Pages 目录调整为 `/frontend/dist`。
+
+---
+
+## ADR-008 — 数据库：PostgreSQL
+
+**日期**：2026-05-16  **状态**：已采纳
+
+### 决策
+从无状态升级为持久化，选用 PostgreSQL（SQLAlchemy async + asyncpg），通过 Railway 托管。
+
 ## ADR-007 — 后端部署：Railway（Hackathon 阶段）
 
 **日期**：2026-05-16  **状态**：已采纳

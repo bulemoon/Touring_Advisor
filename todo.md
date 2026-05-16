@@ -3,9 +3,35 @@
 > 状态：`[ ]` 待做 · `[x]` 完成 · `[~]` 进行中 · `[!]` 阻塞
 
 ## 本周目标
-搭建后端骨架，跑通一次完整的行程输入 → Agent 调用 → 结果返回流程
+完成 AI 旅伴助手 v2 后端骨架 + 前端 MVP 页面
 
 ## Backlog
+
+### v2: AI 旅伴助手 — 后端
+- [x] PostgreSQL + SQLAlchemy 数据模型
+- [x] Alembic 迁移配置
+- [x] JWT 用户认证系统（register/login/profile）
+- [x] 路线推荐 API（list/detail/favorite）
+- [x] 商品搜索 + AI 选品推荐 API
+- [x] 购物车 CRUD + 一键下单 + 订单管理
+- [x] WebSocket AI 聊天端点
+- [x] Agent tools: update_itinerary, update_cart
+- [ ] 对接真实短信服务商（当前 MVP 模拟验证码）
+- [ ] 对接 LangGraph Agent 真实 AI 回复（当前 mock）
+
+### v2: AI 旅伴助手 — 前端
+- [x] Vue 3 + Vite 项目初始化
+- [x] 单页布局（地图 → 聊天 → 路线推荐 → 购物）
+- [x] Leaflet + 高德地图组件
+- [x] AI 聊天输入框 + Bottom Sheet 面板
+- [x] 路线推荐 Tab + 横向滚动卡片
+- [x] 伴手礼商品卡片 + 一键下单 + 购物车
+- [x] 登录遮罩层
+- [x] 个人中心抽屉
+- [x] 流式消息打字机效果
+- [x] 聊天操作反馈（行程/购物车更新提示）
+- [x] 订单提交表单
+- [x] 个人中心子视图（历史/订单/收藏）
 
 ### 环境准备
 - [x] 配置知乎开放平台 Access Secret
@@ -16,31 +42,10 @@
 - [ ] 注册 Railway 账号，创建项目
 - [ ] 申请淘宝联盟开发者账号
 
-### 后端
-- [ ] 初始化 Python 项目结构
-- [ ] 实现 FastAPI 接口层
-- [ ] 实现 Agent planner.py（LangGraph + Kimi）
-- [ ] 实现 Tool: zhihu_search.py
-- [ ] 实现 Tool: zhihu_answer.py
-- [ ] 实现 Tool: weather.py
-- [ ] 实现 Tool: gear.py
-- [ ] 实现 Tool: commerce.py
-- [ ] 实现 Tool: map_poi.py
-- [ ] 实现 utils/coord.py
-- [ ] 接入 Redis 缓存层
-
-### 前端
-- [ ] 实现行程输入页面
-- [ ] 实现推荐结果展示页面
-- [ ] 集成 Leaflet.js + 高德地图
-- [ ] 对接后端 SSE 流式接口
-
 ### 部署
-- [ ] 配置 GitHub Pages 自动部署
-- [ ] 配置 Railway 部署
-- [ ] 填写 Railway 环境变量
-- [ ] Railway 部署后更新 frontend/config.js 的 API_BASE_URL
-
-### 技术债
-- [ ] commerce.py 替换为淘宝联盟 API
-- [ ] Hackathon 后评估迁移后端至 Zeabur
+- [x] 创建 GitHub Actions 构建工作流 (Vite build → GitHub Pages)
+- [x] 更新 railway.toml（启动命令、环境变量）
+- [x] 配置 GitHub Pages 目录为 /frontend/dist
+- [ ] Railway 附加 PostgreSQL（需在 Dashboard 手动操作）
+- [ ] 填写 Railway 环境变量（需在 Dashboard 手动操作）
+- [ ] 更新 frontend/public/config.js 的 API_BASE_URL

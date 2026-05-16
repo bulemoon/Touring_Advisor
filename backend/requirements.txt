@@ -18,3 +18,15 @@ coordtransform>=1.0.0
 
 # 环境变量
 python-dotenv>=1.0.0
+
+# 数据库
+asyncpg>=0.29.0
+sqlalchemy[asyncio]>=2.0.0
+alembic>=1.13.0
+
+# JWT 认证
+PyJWT>=2.8.0
+passlib[bcrypt]>=1.7.4
+
+# WebSocket 聊天
+websockets>=12.0
