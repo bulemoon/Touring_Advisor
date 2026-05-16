@@ -1,0 +1,25 @@
+# 密钥文件（含 API Key 等敏感信息）
+.env
+frontend/config.js
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+
+# macOS
+.DS_Store
+.playwright-cli/
+
+# IDE
+.vscode/
+.idea/
+
+# Railway
+.railway/
+
+# 日志
+*.log

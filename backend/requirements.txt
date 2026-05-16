@@ -1,0 +1,20 @@
+# Web 框架
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+
+# Agent 编排
+langgraph>=0.1.0
+langchain-core>=0.1.0
+openai>=1.0.0          # Kimi 兼容 OpenAI SDK，base_url 设为 platform.moonshot.cn
+
+# HTTP 客户端
+httpx>=0.26.0
+
+# 缓存
+redis>=5.0.0
+
+# 坐标转换 WGS-84 <-> GCJ-02
+coordtransform>=1.0.0
+
+# 环境变量
+python-dotenv>=1.0.0
