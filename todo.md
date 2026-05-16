@@ -16,8 +16,8 @@
 - [x] 购物车 CRUD + 一键下单 + 订单管理
 - [x] WebSocket AI 聊天端点
 - [x] Agent tools: update_itinerary, update_cart
-- [ ] 对接真实短信服务商（当前 MVP 模拟验证码）
-- [ ] 对接 LangGraph Agent 真实 AI 回复（当前 mock）
+- [~] 对接真实短信服务商（当前 MVP 模拟验证码）
+- [x] 对接 DeepSeek LLM 真实 AI 回复（已替换 Kimi）
 
 ### v2: AI 旅伴助手 — 前端
 - [x] Vue 3 + Vite 项目初始化
@@ -32,13 +32,16 @@
 - [x] 聊天操作反馈（行程/购物车更新提示）
 - [x] 订单提交表单
 - [x] 个人中心子视图（历史/订单/收藏）
+- [x] 历史记录下拉框 + 删除/清空功能
+- [x] 日期选择器（根据对话步骤自动切换）
+- [x] 加载中动画（脉冲提示）
 
 ### 环境准备
 - [x] 配置知乎开放平台 Access Secret
 - [x] 配置 Kimi API Key
 - [x] 配置高德地图 Web 服务 Key
 - [x] 配置高德地图 Web JS Key
-- [ ] 申请和风天气 API Key
+- [~] 申请和风天气 API Key（Open-Meteo 已临时替代）
 - [ ] 注册 Railway 账号，创建项目
 - [ ] 申请淘宝联盟开发者账号
 
