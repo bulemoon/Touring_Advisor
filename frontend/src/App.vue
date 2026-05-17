@@ -8,7 +8,7 @@
       <img class="avatar-btn" src="https://via.placeholder.com/36" @click="showDrawer = true" />
     </header>
 
-    <MapArea @located="onLocated" />
+    <MapArea :route-plan="chat.currentRoutePlan" @located="onLocated" />
 
     <ChatSection :lat="lat" :lng="lng" />
 
@@ -25,6 +25,7 @@
 <script setup lang="ts">
 import { ref } from "vue"
 import { useAuthStore } from "./stores/auth"
+import { useChatStore } from "./stores/chat"
 import MapArea from "./components/MapArea.vue"
 import ChatSection from "./components/ChatSection.vue"
 // import TourSection from "./components/TourSection.vue"
@@ -33,6 +34,7 @@ import AuthOverlay from "./components/AuthOverlay.vue"
 import UserDrawer from "./components/UserDrawer.vue"
 
 const auth = useAuthStore()
+const chat = useChatStore()
 const showDrawer = ref(false)
 const lat = ref(39.9042)
 const lng = ref(116.4074)

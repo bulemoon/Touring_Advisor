@@ -14,6 +14,49 @@ interface SessionMeta {
   message_count: number
 }
 
+export interface RouteStop {
+  name: string
+  address?: string
+  lat: number
+  lng: number
+  sort_order?: number
+  duration_minutes?: number
+  tip?: string
+}
+
+export interface RouteSegment {
+  from?: string
+  to?: string
+  distance_m?: number
+  duration_sec?: number
+  polyline?: [number, number][]
+  source?: string
+}
+
+export interface RouteDay {
+  day: number
+  stops: RouteStop[]
+  segments?: RouteSegment[]
+  polyline?: [number, number][]
+  distance_m?: number
+  travel_duration_sec?: number
+  stay_duration_min?: number
+}
+
+export interface RoutePlan {
+  title?: string
+  summary?: string
+  coord_system?: string
+  mode?: string
+  optimized?: boolean
+  start?: RouteStop | null
+  days?: RouteDay[]
+  stops?: RouteStop[]
+  polyline?: [number, number][]
+  distance_m?: number
+  travel_duration_sec?: number
+}
+
 export const useChatStore = defineStore("chat", () => {
   const messages = ref<ChatMessage[]>([])
   const showChat = ref(false)
@@ -23,11 +66,11 @@ export const useChatStore = defineStore("chat", () => {
   let loadingDotsTimer: ReturnType<typeof setInterval> | null = null
   const loadingDots = ref("")
 
-  // Session
   const sessionId = ref<string | null>(null)
   const sessions = ref<SessionMeta[]>([])
   const sessionState = ref<string>("")
   const currentStep = ref<string>("")
+  const currentRoutePlan = ref<RoutePlan | null>(null)
 
   const API = () => window.CONFIG?.API_BASE_URL || ""
 
@@ -53,6 +96,7 @@ export const useChatStore = defineStore("chat", () => {
   function resetSession() {
     sessionId.value = null
     sessionState.value = ""
+    currentRoutePlan.value = null
     messages.value = []
     stopTyping()
   }
@@ -93,6 +137,7 @@ export const useChatStore = defineStore("chat", () => {
         sessionId.value = sid
         sessionState.value = data.state || "done"
         currentStep.value = data.current_step || ""
+        currentRoutePlan.value = data.route_plan || data.result?.route_plan || null
         showChat.value = true
       }
     } catch {}
@@ -126,14 +171,11 @@ export const useChatStore = defineStore("chat", () => {
   async function send(message: string, lat: number, lng: number) {
     messages.value.push({ role: "user", content: message })
 
-    // 如果没有 session，自动创建
     if (!sessionId.value) {
       await startSession()
-      // 已创建 session，再发送用户的第一条消息
       messages.value.push({ role: "user", content: message })
     }
 
-    // 插入加载中提示
     const loadingBase = sessionState.value === "generating"
       ? "正在生成推荐方案"
       : "正在查询天气与周边信息"
@@ -159,8 +201,8 @@ export const useChatStore = defineStore("chat", () => {
         sessionState.value = data.state || sessionState.value
         currentStep.value = data.current_step || currentStep.value
       }
+      currentRoutePlan.value = data.route_plan || data.result?.route_plan || currentRoutePlan.value
 
-      // 移除加载中提示，替换为实际回复
       stopLoadingDots()
       messages.value[loadingIdx] = { role: "assistant", content: "" }
       const fullText = data.content
@@ -182,7 +224,7 @@ export const useChatStore = defineStore("chat", () => {
     loadingDots.value = baseText
     loadingDotsTimer = setInterval(() => {
       dotCount = (dotCount + 1) % 4
-      loadingDots.value = baseText + "·".repeat(dotCount)
+      loadingDots.value = baseText + ".".repeat(dotCount)
     }, 500)
   }
 
@@ -213,10 +255,24 @@ export const useChatStore = defineStore("chat", () => {
   }
 
   return {
-    messages, showChat, isTyping, typingText, loadingDots,
-    sessionId, sessions, sessionState, currentStep,
-    send, startSession, loadSession, fetchSessions, resetSession,
-    deleteSession, clearAllSessions,
-    stopTyping, disconnect,
+    messages,
+    showChat,
+    isTyping,
+    typingText,
+    loadingDots,
+    sessionId,
+    sessions,
+    sessionState,
+    currentStep,
+    currentRoutePlan,
+    send,
+    startSession,
+    loadSession,
+    fetchSessions,
+    resetSession,
+    deleteSession,
+    clearAllSessions,
+    stopTyping,
+    disconnect,
   }
 })

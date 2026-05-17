@@ -7,6 +7,7 @@ import json
 import uuid
 import random
 import re
+import math
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
@@ -104,6 +105,7 @@ def _save_session(sid: str):
         "gear": (s.get("result") or {}).get("gear"),
         "zhihu": (s.get("result") or {}).get("zhihu"),
         "summary": (s.get("result") or {}).get("summary"),
+        "route_plan": (s.get("result") or {}).get("route_plan"),
     }
     with open(sdir / "meta.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
@@ -168,6 +170,7 @@ def _load_sessions_from_disk():
                     "gear": meta.get("gear"),
                     "zhihu": meta.get("zhihu"),
                     "summary": meta.get("summary"),
+                    "route_plan": meta.get("route_plan"),
                     "destination_coords": meta.get("destination_coords"),
                 }
             _sessions[sid] = {
@@ -247,6 +250,123 @@ def geocode_city(city: str) -> tuple[float, float] | None:
     except Exception as e:
         print(f"[Amap] Geocode error: {e}")
     return None
+
+
+def haversine_m(a_lat: float, a_lng: float, b_lat: float, b_lng: float) -> int:
+    radius = 6371000
+    phi1 = math.radians(a_lat)
+    phi2 = math.radians(b_lat)
+    dphi = math.radians(b_lat - a_lat)
+    dlambda = math.radians(b_lng - a_lng)
+    h = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    return int(2 * radius * math.asin(math.sqrt(h)))
+
+
+def build_route_plan_from_text(full_reply: str, attractions: list[dict], duration: str) -> dict | None:
+    valid = [
+        item for item in attractions
+        if isinstance(item.get("lat"), (int, float)) and isinstance(item.get("lng"), (int, float))
+    ]
+    if len(valid) < 2:
+        return None
+
+    day_count = 3 if duration == "3-day" else 1
+    day_sections: list[tuple[int, str]] = []
+    matches = list(re.finditer(r"(?:Day|D)\s*([1-9])|第([一二三四五六七八九])天", full_reply, flags=re.IGNORECASE))
+    chinese_day = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+    for index, match in enumerate(matches):
+        day = int(match.group(1)) if match.group(1) else chinese_day.get(match.group(2), index + 1)
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(full_reply)
+        if day:
+            day_sections.append((day, full_reply[start:end]))
+
+    if not day_sections:
+        day_sections = [(1, full_reply)]
+
+    used_names: set[str] = set()
+    days = []
+    ordered_all = []
+
+    for day, section in day_sections[:day_count]:
+        stops = []
+        for item in valid:
+            name = item.get("name", "")
+            if not name or name in used_names:
+                continue
+            if name in section:
+                stops.append({
+                    "name": name,
+                    "address": item.get("address", ""),
+                    "lat": item["lat"],
+                    "lng": item["lng"],
+                    "sort_order": len(ordered_all) + len(stops) + 1,
+                    "duration_minutes": 60,
+                    "tip": "来自本次攻略推荐",
+                })
+                used_names.add(name)
+        days.append({"day": day, "stops": stops})
+        ordered_all.extend(stops)
+
+    if len(ordered_all) < 2:
+        fallback_count = 9 if duration == "3-day" else 5
+        ordered_all = []
+        used_names = set()
+        chunks = [[] for _ in range(day_count)]
+        for index, item in enumerate(valid[:fallback_count]):
+            stop = {
+                "name": item.get("name", ""),
+                "address": item.get("address", ""),
+                "lat": item["lat"],
+                "lng": item["lng"],
+                "sort_order": index + 1,
+                "duration_minutes": 60,
+                "tip": "来自目的地周边推荐",
+            }
+            chunks[index * day_count // min(fallback_count, len(valid))].append(stop)
+            ordered_all.append(stop)
+            used_names.add(stop["name"])
+        days = [{"day": index + 1, "stops": stops} for index, stops in enumerate(chunks)]
+
+    response_days = []
+    full_polyline = []
+    total_distance = 0
+    for day in days:
+        stops = day["stops"]
+        segments = []
+        day_distance = 0
+        polyline = [[stop["lat"], stop["lng"]] for stop in stops]
+        for origin, destination in zip(stops, stops[1:]):
+            distance = haversine_m(origin["lat"], origin["lng"], destination["lat"], destination["lng"])
+            day_distance += distance
+            segments.append({
+                "from": origin["name"],
+                "to": destination["name"],
+                "distance_m": distance,
+                "polyline": [[origin["lat"], origin["lng"]], [destination["lat"], destination["lng"]]],
+                "source": "straight_line",
+            })
+        total_distance += day_distance
+        for point in polyline:
+            if not full_polyline or full_polyline[-1] != point:
+                full_polyline.append(point)
+        response_days.append({
+            "day": day["day"],
+            "stops": stops,
+            "segments": segments,
+            "polyline": polyline,
+            "distance_m": day_distance,
+        })
+
+    return {
+        "coord_system": "gcj02",
+        "mode": "walking",
+        "optimized": False,
+        "days": response_days,
+        "stops": ordered_all,
+        "polyline": full_polyline,
+        "distance_m": total_distance,
+    }
 
 
 # ===== 天气查询（Open-Meteo + QWeather 备用）=====
@@ -684,7 +804,14 @@ async def chat(req: ChatRequest):
 
         session["messages"].append({"role": "assistant", "content": reply})
         _save_session(sid)
-        return {"type": "message", "content": reply, "session_id": sid, "state": session["state"], "current_step": STEPS[session["step"]]}
+        return {
+            "type": "message",
+            "content": reply,
+            "session_id": sid,
+            "state": session["state"],
+            "current_step": STEPS[session["step"]],
+            "route_plan": (session.get("result") or {}).get("route_plan"),
+        }
 
     # 推荐已完成，后续对话
     if session["state"] == "done":
@@ -706,7 +833,13 @@ async def chat(req: ChatRequest):
         reply = call_deepseek(system, user) or "收到你的消息了！有什么需要调整的吗？"
         session["messages"].append({"role": "assistant", "content": reply})
         _save_session(sid)
-        return {"type": "message", "content": reply, "session_id": sid, "state": session["state"]}
+        return {
+            "type": "message",
+            "content": reply,
+            "session_id": sid,
+            "state": session["state"],
+            "route_plan": (session.get("result") or {}).get("route_plan"),
+        }
 
     return {"type": "message", "content": "正在处理...", "session_id": sid, "state": session.get("state")}
 
@@ -982,9 +1115,12 @@ def _generate_recommendation(session: dict) -> dict:
         else:
             attractions.append(item)
 
+    route_plan = build_route_plan_from_text(full_reply, attractions, duration)
+
     return {
         "summary": full_reply,
         "attractions": attractions,
+        "route_plan": route_plan,
         "shopping": shopping,
         "weather": weather,
         "zhihu": zhihu,
