@@ -661,22 +661,6 @@ async def get_session(session_id: str):
     return _sessions[session_id]
 
 
-@app.delete("/api/session/{session_id}")
-async def delete_session(session_id: str):
-    """删除指定会话"""
-    if session_id in _sessions:
-        del _sessions[session_id]
-    # 删除文件/文件夹
-    json_file = SESSION_DIR / f"{session_id}.json"
-    folder = SESSION_DIR / session_id
-    if json_file.exists():
-        json_file.unlink()
-    if folder.exists():
-        import shutil
-        shutil.rmtree(folder)
-    return {"success": True}
-
-
 @app.delete("/api/session/all")
 async def clear_all_sessions():
     """清空所有会话及对话记录"""
@@ -697,9 +681,9 @@ async def clear_all_sessions():
                 deleted.append(f"dir:{item.name}")
         except Exception as e:
             errors.append(f"{item.name}: {e}")
-    # 删除 dialog 目录所有历史记录
+    # 删除 dialog 目录所有运行时历史记录（保留模板）
     for item in list(DIALOG_DIR.iterdir()):
-        if item.name.startswith("."):
+        if item.name.startswith(".") or item.name in ("prompt.md", "output.md"):
             continue
         try:
             if item.is_file():
@@ -713,6 +697,22 @@ async def clear_all_sessions():
             errors.append(f"dialog-{item.name}: {e}")
     print(f"[ClearAll] deleted={deleted}, errors={errors}")
     return {"success": True, "deleted": len(deleted), "errors": errors}
+
+
+@app.delete("/api/session/{session_id}")
+async def delete_session(session_id: str):
+    """删除指定会话"""
+    if session_id in _sessions:
+        del _sessions[session_id]
+    # 删除文件/文件夹
+    json_file = SESSION_DIR / f"{session_id}.json"
+    folder = SESSION_DIR / session_id
+    if json_file.exists():
+        json_file.unlink()
+    if folder.exists():
+        import shutil
+        shutil.rmtree(folder)
+    return {"success": True}
 
 
 @app.post("/api/chat")
