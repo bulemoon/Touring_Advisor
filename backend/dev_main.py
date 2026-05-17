@@ -43,20 +43,7 @@ DIALOG_DIR = Path(__file__).resolve().parent.parent / "dialog"
 DIALOG_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def _save_dialog(sid: str, system: str, user: str, full_reply: str):
-    """保存对话 prompt 和 AI 输出到 dialog 目录"""
-    try:
-        # 保存实际 prompt（替换变量后的内容）
-        prompt_file = DIALOG_DIR / f"{sid}_prompt.md"
-        with open(prompt_file, "w", encoding="utf-8") as f:
-            f.write(f"# System\n{system}\n\n")
-            f.write(f"# User\n{user}\n")
-        # 保存 AI 输出
-        reply_file = DIALOG_DIR / f"{sid}.md"
-        with open(reply_file, "w", encoding="utf-8") as f:
-            f.write(full_reply)
-    except Exception as e:
-        print(f"[Dialog] Save error for {sid}: {e}")
+
 
 # ===== 内存缓存 =====
 _AMAP_CACHE: dict[str, list[dict]] = {}
@@ -902,9 +889,6 @@ def _generate_recommendation(session: dict) -> dict:
     full_reply = call_deepseek(system, user)
     if not full_reply:
         full_reply = f"## {dest} {duration_label} 推荐\n\n根据你的需求，我为你准备了以下推荐...\n\n{poi_text[:500]}"
-
-    # 保存 prompt 和输出到 dialog 目录
-    _save_dialog(session["id"], system, user, full_reply)
 
     # 构建结构化返回结果：分拆景点和购物，包含完整坐标
     attractions = []
