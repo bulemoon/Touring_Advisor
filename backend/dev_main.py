@@ -752,28 +752,50 @@ async def chat(req: ChatRequest):
         session["inputs"][key] = user_msg
         session["messages"].append({"role": "user", "content": user_msg})
 
-        # 智能检测：从任意步骤的输入中提取时长信息
+        # 智能检测：从输入中提取时长
         for k, v in TOUR_DURATIONS.items():
             if k in user_msg:
                 session["inputs"]["duration"] = v
                 break
 
-        # 进入下一步（跳过已收集的步骤）
+        # 智能检测：从输入中提取日期
+        date_match = re.search(r"(\d{1,2}月\d{1,2}[日号])|(下周[一二三四五六日天])|(明天|后天|今天)", user_msg)
+        if date_match:
+            session["inputs"]["date"] = date_match.group(0)
+
+        # 跳过已收集的步骤
         next_step = step + 1
         while next_step < len(STEPS) and session["inputs"].get(STEPS[next_step]):
             next_step += 1
 
-        # 检查是否收集完毕
-        if next_step >= len(STEPS):
-            # 所有信息已收集，开始生成推荐
+        # 检查是否全部收集完毕
+        all_done = all(session["inputs"].get(s) for s in STEPS)
+
+        if all_done:
+            # 全部信息已收集，进入确认状态
+            session["state"] = "confirming"
+            inp = session["inputs"]
+            dur_label = ""
+            for k, v in TOUR_DURATIONS.items():
+                if v == inp["duration"] and len(k) <= 3:
+                    dur_label = k + "游"
+                    break
+            reply = (
+                f"收到！为您确认以下信息：\n\n"
+                f"📍 目的地：{inp['destination']}\n"
+                f"📅 日期：{inp['date']}\n"
+                f"🏨 居住位置：{inp['residence']}\n"
+                f"⏱️ 行程时长：{dur_label or inp['duration']}\n\n"
+                f"确认无误请回复「确认」或「好的」，或告诉我需要调整的部分。"
+            )
+        elif next_step >= len(STEPS):
+            # 跳过了但没全齐（不应出现），继续生成
             session["state"] = "generating"
             session["messages"].append({
                 "role": "assistant",
                 "content": "信息收集完毕！正在为你查询天气、周边景点和旅行攻略..."
             })
             _save_session(sid)
-
-            # 异步生成推荐（这里是同步的，但在真实场景可以放后台任务）
             try:
                 result = _generate_recommendation(session)
                 session["result"] = result
@@ -797,8 +819,43 @@ async def chat(req: ChatRequest):
             "content": reply,
             "session_id": sid,
             "state": session["state"],
-            "current_step": STEPS[session["step"]],
-            "route_plan": (session.get("result") or {}).get("route_plan"),
+            "current_step": STEPS[session["step"]] if session["step"] < len(STEPS) else ""
+        }
+
+    # 确认阶段：等待用户确认
+    if session["state"] == "confirming":
+        session["messages"].append({"role": "user", "content": user_msg})
+
+        if re.search(r"确认|好的|可以|没问题|行|ok|yes|对|没错|嗯", user_msg, re.IGNORECASE):
+            # 用户确认，开始生成
+            session["state"] = "generating"
+            session["messages"].append({
+                "role": "assistant",
+                "content": "好的，正在为你查询天气、周边景点和旅行攻略..."
+            })
+            _save_session(sid)
+            try:
+                result = _generate_recommendation(session)
+                session["result"] = result
+                session["state"] = "done"
+                reply = result.get("summary", "推荐生成完成！")
+            except Exception as e:
+                reply = f"推荐生成时出错：{e}"
+                session["state"] = "confirming"
+        else:
+            # 用户想调整，回到 collecting 状态
+            session["state"] = "collecting"
+            session["step"] = 0
+            reply = "好的，请告诉我你想调整什么？是目的地、日期、住宿还是行程时长？"
+
+        session["messages"].append({"role": "assistant", "content": reply})
+        _save_session(sid)
+        return {
+            "type": "message",
+            "content": reply,
+            "session_id": sid,
+            "state": session["state"],
+            "current_step": STEPS[0] if session["state"] == "collecting" else ""
         }
 
     # 推荐已完成，后续对话
