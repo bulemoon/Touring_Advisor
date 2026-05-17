@@ -8,19 +8,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue"
+import { onMounted, onUnmounted, ref, watch } from "vue"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
+import type { RouteDay, RoutePlan, RouteStop } from "../stores/chat"
 
+const props = defineProps<{ routePlan: RoutePlan | null }>()
 const emit = defineEmits<{ located: [lat: number, lng: number] }>()
 
 const mapContainer = ref<HTMLDivElement>()
+const locating = ref(false)
+
 let map: L.Map | null = null
 let currentMarker: L.Marker | null = null
-const locating = ref(false)
+let routeLayer: L.LayerGroup | null = null
+let forceFocusLocation = false
 
 const DEFAULT_LAT = 39.9042
 const DEFAULT_LNG = 116.4074
+const DAY_COLORS = ["#2f80ed", "#eb5757", "#27ae60", "#f2994a", "#9b51e0", "#00a6a6"]
 
 const locationIcon = L.icon({
   iconUrl: "/icons/location-pin.svg",
@@ -29,20 +35,34 @@ const locationIcon = L.icon({
   popupAnchor: [0, -36],
 })
 
+function hasRoutePlan(routePlan: RoutePlan | null) {
+  return normalizeRouteDays(routePlan).length > 0
+}
+
 function addLocationMarker(lat: number, lng: number, label: string) {
-  if (currentMarker) map?.removeLayer(currentMarker)
+  if (!map) return null
+  if (currentMarker) map.removeLayer(currentMarker)
   currentMarker = L.marker([lat, lng], { icon: locationIcon })
-    .addTo(map!)
+    .addTo(map)
     .bindPopup(label)
-    .openPopup()
   return currentMarker
 }
 
 function relocate() {
   if (locating.value || !map) return
   locating.value = true
-  addLocationMarker(DEFAULT_LAT, DEFAULT_LNG, "定位中…")
+  forceFocusLocation = true
+  addLocationMarker(DEFAULT_LAT, DEFAULT_LNG, "定位中...")
   locateWithAmap()
+}
+
+function focusLocation(lat: number, lng: number, zoom = 14) {
+  if (!map) return
+  if (forceFocusLocation || !hasRoutePlan(props.routePlan)) {
+    map.setView([lat, lng], zoom)
+    currentMarker?.openPopup()
+  }
+  forceFocusLocation = false
 }
 
 function loadAmapScript(): Promise<void> {
@@ -69,17 +89,17 @@ async function fallbackToIpLocation() {
   try {
     const res = await fetch("/api/location/ip")
     const data = await res.json()
-    console.log("[IP Geo] 返回:", data)
     if (data.success) {
-      map?.setView([data.lat, data.lng], 11)
       addLocationMarker(data.lat, data.lng, `${data.city || "当前城市"}（IP 定位）`)
+      focusLocation(data.lat, data.lng, 11)
       emit("located", data.lat, data.lng)
       return
     }
   } catch (e) {
-    console.warn("[IP Geo] 失败:", e)
+    console.warn("[IP Geo] failed:", e)
   }
   addLocationMarker(DEFAULT_LAT, DEFAULT_LNG, "无法定位，使用默认位置")
+  focusLocation(DEFAULT_LAT, DEFAULT_LNG, 11)
   emit("located", DEFAULT_LAT, DEFAULT_LNG)
 }
 
@@ -90,13 +110,14 @@ function fallbackToNativeGeo() {
   }
   navigator.geolocation.getCurrentPosition(
     (pos) => {
+      locating.value = false
       const [lat, lng] = wgs84ToGcj02(pos.coords.latitude, pos.coords.longitude)
-      map?.setView([lat, lng], 14)
       addLocationMarker(lat, lng, `我的位置<br/>${lat.toFixed(5)}, ${lng.toFixed(5)}`)
+      focusLocation(lat, lng)
       emit("located", lat, lng)
     },
     (err) => {
-      console.warn("[Geo] 原生定位失败:", err.code, err.message)
+      console.warn("[Geo] native location failed:", err.code, err.message)
       fallbackToIpLocation()
     },
     { timeout: 15000, enableHighAccuracy: false, maximumAge: 300000 }
@@ -118,15 +139,142 @@ function locateWithAmap() {
     if (status === "complete" && result.position) {
       const lat = result.position.getLat()
       const lng = result.position.getLng()
-      map?.setView([lat, lng], 14)
       addLocationMarker(lat, lng, `我的位置<br/>${lat.toFixed(5)}, ${lng.toFixed(5)}`)
+      focusLocation(lat, lng)
       emit("located", lat, lng)
     } else {
-      console.warn("[AMap] 定位失败:", result?.info, result?.message)
-      // AMap 失败，降级到浏览器原生定位
+      console.warn("[AMap] location failed:", result?.info, result?.message)
       fallbackToNativeGeo()
     }
   })
+}
+
+function redrawRoutePlan(routePlan: RoutePlan | null) {
+  if (!map || !routeLayer) return
+  routeLayer.clearLayers()
+
+  const days = normalizeRouteDays(routePlan)
+  if (!days.length) return
+
+  const boundsPoints: L.LatLngExpression[] = []
+
+  days.forEach((day, dayIndex) => {
+    const color = DAY_COLORS[dayIndex % DAY_COLORS.length]
+    const stops = day.stops.filter(isValidStop)
+
+    stops.forEach((stop, stopIndex) => {
+      boundsPoints.push([stop.lat, stop.lng])
+      const marker = L.marker([stop.lat, stop.lng], {
+        icon: createRouteIcon(day.day, stopIndex + 1, color),
+      }).bindPopup(createStopPopup(day.day, stopIndex + 1, stop))
+      routeLayer?.addLayer(marker)
+    })
+
+    const linePoints = getDayPolyline(day, stops)
+    if (linePoints.length >= 2) {
+      linePoints.forEach(point => boundsPoints.push(point))
+      routeLayer?.addLayer(L.polyline(linePoints, {
+        color,
+        weight: 4,
+        opacity: 0.92,
+        lineJoin: "round",
+      }))
+    }
+  })
+
+  if (boundsPoints.length > 0) {
+    map.fitBounds(L.latLngBounds(boundsPoints), { padding: [30, 30], maxZoom: 15 })
+  }
+}
+
+function normalizeRouteDays(routePlan: RoutePlan | null): RouteDay[] {
+  if (!routePlan) return []
+  const days = (routePlan.days || [])
+    .map(day => ({ ...day, stops: day.stops || [] }))
+    .filter(day => day.stops.some(isValidStop))
+  if (days.length > 0) return days
+
+  const stops = (routePlan.stops || []).filter(isValidStop)
+  return stops.length > 0 ? [{ day: 1, stops }] : []
+}
+
+function getDayPolyline(day: RouteDay, stops: RouteStop[]): L.LatLngExpression[] {
+  if (day.polyline?.length) {
+    return day.polyline.filter(isValidPoint).map(point => [point[0], point[1]])
+  }
+
+  const segmentPoints = (day.segments || [])
+    .flatMap(segment => segment.polyline || [])
+    .filter(isValidPoint)
+    .map(point => [point[0], point[1]] as L.LatLngExpression)
+  if (segmentPoints.length) return segmentPoints
+
+  return stops.map(stop => [stop.lat, stop.lng] as L.LatLngExpression)
+}
+
+function createRouteIcon(day: number, order: number, color: string) {
+  return L.divIcon({
+    className: "route-marker",
+    html: `<div style="--route-color:${color}"><span>D${day}</span><strong>${order}</strong></div>`,
+    iconSize: [34, 42],
+    iconAnchor: [17, 42],
+    popupAnchor: [0, -38],
+  })
+}
+
+function createStopPopup(day: number, order: number, stop: RouteStop) {
+  const duration = formatDuration(stop.duration_minutes)
+  const address = stop.address || "暂无地址"
+  const tip = stop.tip || "来自本次行程推荐"
+  return `
+    <div class="route-popup">
+      <strong>第${formatChineseNumber(day)}天 - 第${formatChineseNumber(order)}站</strong>
+      <div>${escapeHtml(stop.name)}</div>
+      <small>${escapeHtml(address)}</small>
+      <small>停留：${escapeHtml(duration)}</small>
+      <small>${escapeHtml(tip)}</small>
+    </div>
+  `
+}
+
+function formatDuration(minutes?: number) {
+  if (!Number.isFinite(minutes) || !minutes || minutes <= 0) return "按行程安排"
+  const wholeMinutes = Math.round(minutes)
+  const hours = Math.floor(wholeMinutes / 60)
+  const restMinutes = wholeMinutes % 60
+  if (hours > 0 && restMinutes > 0) return `${hours}小时${restMinutes}分钟`
+  if (hours > 0) return `${hours}小时`
+  return `${restMinutes}分钟`
+}
+
+function formatChineseNumber(value: number) {
+  const digits = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"]
+  if (value >= 0 && value <= 9) return digits[value]
+  if (value === 10) return "十"
+  if (value > 10 && value < 20) return `十${digits[value % 10]}`
+  if (value < 100) {
+    const ten = Math.floor(value / 10)
+    const one = value % 10
+    return `${digits[ten]}十${one ? digits[one] : ""}`
+  }
+  return String(value)
+}
+
+function isValidStop(stop: RouteStop) {
+  return Number.isFinite(stop.lat) && Number.isFinite(stop.lng)
+}
+
+function isValidPoint(point: [number, number]) {
+  return Array.isArray(point) && Number.isFinite(point[0]) && Number.isFinite(point[1])
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;")
 }
 
 onMounted(async () => {
@@ -142,21 +290,29 @@ onMounted(async () => {
     { maxZoom: 18, subdomains: ["1", "2", "3", "4"] }
   ).addTo(map)
 
-  addLocationMarker(DEFAULT_LAT, DEFAULT_LNG, "定位中…")
+  routeLayer = L.layerGroup().addTo(map)
+  addLocationMarker(DEFAULT_LAT, DEFAULT_LNG, "默认位置")
+  redrawRoutePlan(props.routePlan)
 
-  try {
-    await loadAmapScript()
-    locateWithAmap()
-  } catch {
-    fallbackToIpLocation()
+  if (!hasRoutePlan(props.routePlan)) {
+    try {
+      await loadAmapScript()
+      locateWithAmap()
+    } catch {
+      fallbackToIpLocation()
+    }
   }
 })
 
+watch(() => props.routePlan, redrawRoutePlan, { deep: true })
+
 onUnmounted(() => {
   map?.remove()
+  map = null
+  routeLayer = null
+  currentMarker = null
 })
 
-// 仅降级用：WGS-84 → GCJ-02
 function wgs84ToGcj02(lat: number, lng: number): [number, number] {
   const a = 6378245.0
   const ee = 0.00669342162296594323
@@ -231,6 +387,71 @@ function transformLng(x: number, y: number): number {
 
 .locate-btn.locating .material-icons {
   animation: spin 1s linear infinite;
+}
+
+:deep(.route-marker) {
+  background: transparent;
+  border: none;
+}
+
+:deep(.route-marker div) {
+  width: 34px;
+  height: 42px;
+  color: #fff;
+  background: var(--route-color);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 17px 17px 17px 4px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(-45deg);
+}
+
+:deep(.route-marker span),
+:deep(.route-marker strong) {
+  display: block;
+  line-height: 1;
+  transform: rotate(45deg);
+}
+
+:deep(.route-marker span) {
+  font-size: 9px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+:deep(.route-marker strong) {
+  margin-top: 2px;
+  font-size: 15px;
+}
+
+:deep(.route-popup) {
+  min-width: 160px;
+  color: #2b241b;
+}
+
+:deep(.route-popup strong),
+:deep(.route-popup div),
+:deep(.route-popup small) {
+  display: block;
+}
+
+:deep(.route-popup strong) {
+  margin-bottom: 6px;
+  color: #9a6a18;
+}
+
+:deep(.route-popup div) {
+  margin-bottom: 4px;
+  font-weight: 700;
+}
+
+:deep(.route-popup small) {
+  margin-top: 3px;
+  color: #5f564c;
+  line-height: 1.45;
 }
 
 @keyframes spin {

@@ -7,25 +7,14 @@
         已根据您当前所在位置，准备好景区解读、路线推荐与周边消费建议。
       </p>
       <div class="chat-input-row" @click="chat.showChat = true">
-        <template v-if="isDateStep">
-          <input
-            type="date"
-            v-model="selectedDate"
-            class="chat-input date-picker"
-            @click.stop
-          />
-          <button class="chat-send-btn" @click.stop="handleDateSubmit">确认日期</button>
-        </template>
-        <template v-else>
-          <input
-            v-model="inputText"
-            class="chat-input"
-            placeholder="例如：帮我安排一个鼓浪屿精华半日游"
-            @click.stop
-            @keyup.enter="handleNewSession"
-          />
-          <button class="chat-send-btn" @click.stop="handleNewSession">发送</button>
-        </template>
+        <input
+          v-model="inputText"
+          class="chat-input"
+          placeholder="例如：帮我安排一个鼓浪屿精华半日游"
+          @click.stop
+          @keyup.enter="handleNewSession"
+        />
+        <button class="chat-send-btn" @click.stop="handleNewSession">发送</button>
       </div>
       <div class="history-row" ref="historyDropdownRef">
         <div class="history-dropdown-trigger" @click="toggleHistoryDropdown">
@@ -104,7 +93,9 @@
           <input
             type="date"
             v-model="selectedDate"
+            ref="dateInputRef"
             class="date-picker"
+            @click="openDatePicker"
           />
           <button @click="handleDateSubmit">确认日期</button>
         </template>
@@ -133,6 +124,7 @@ let feedbackTimer: ReturnType<typeof setTimeout> | null = null
 const selectedSessionId = ref("")
 const showHistoryDropdown = ref(false)
 const historyDropdownRef = ref<HTMLElement | null>(null)
+const dateInputRef = ref<HTMLInputElement | null>(null)
 
 // Date picker
 const selectedDate = ref("")
@@ -273,6 +265,16 @@ async function handleDateSubmit() {
   chat.showChat = true
   await chat.send(formattedDate, props.lat, props.lng)
   selectedDate.value = ""
+}
+
+function openDatePicker() {
+  const el = dateInputRef.value as HTMLInputElement & { showPicker?: () => void }
+  if (!el) return
+  if (typeof el.showPicker === "function") {
+    el.showPicker()
+  } else {
+    el.focus()
+  }
 }
 </script>
 
