@@ -752,15 +752,16 @@ async def chat(req: ChatRequest):
         session["inputs"][key] = user_msg
         session["messages"].append({"role": "user", "content": user_msg})
 
-        # 如果是 duration 步骤，尝试标准化
-        if key == "duration":
-            for k, v in TOUR_DURATIONS.items():
-                if k in user_msg:
-                    session["inputs"]["duration"] = v
-                    break
+        # 智能检测：从任意步骤的输入中提取时长信息
+        for k, v in TOUR_DURATIONS.items():
+            if k in user_msg:
+                session["inputs"]["duration"] = v
+                break
 
-        # 进入下一步
+        # 进入下一步（跳过已收集的步骤）
         next_step = step + 1
+        while next_step < len(STEPS) and session["inputs"].get(STEPS[next_step]):
+            next_step += 1
 
         # 检查是否收集完毕
         if next_step >= len(STEPS):
