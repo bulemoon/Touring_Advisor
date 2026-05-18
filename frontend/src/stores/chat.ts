@@ -57,6 +57,21 @@ export interface RoutePlan {
   travel_duration_sec?: number
 }
 
+export interface ShoppingRecommendation {
+  name: string
+  type?: string
+  address?: string
+  distance?: string | number
+  distance_m?: number
+  lat?: number | null
+  lng?: number | null
+  rating?: string | number
+  reason?: string
+  source?: "itinerary_product" | "souvenir" | "local_shop" | "nearby"
+  purchase_keywords?: string[]
+  recommended_products?: string[]
+}
+
 export const useChatStore = defineStore("chat", () => {
   const messages = ref<ChatMessage[]>([])
   const showChat = ref(false)
@@ -71,6 +86,7 @@ export const useChatStore = defineStore("chat", () => {
   const sessionState = ref<string>("")
   const currentStep = ref<string>("")
   const currentRoutePlan = ref<RoutePlan | null>(null)
+  const currentShoppingRecommendations = ref<ShoppingRecommendation[]>([])
 
   const API = () => window.CONFIG?.API_BASE_URL || ""
 
@@ -93,10 +109,24 @@ export const useChatStore = defineStore("chat", () => {
     }, speed)
   }
 
+  function getShoppingFromSession(data: any): ShoppingRecommendation[] {
+    const shopping = data?.shopping || data?.result?.shopping || []
+    return Array.isArray(shopping) ? shopping : []
+  }
+
+  function syncFromPayload(data: any) {
+    currentRoutePlan.value = data?.route_plan || data?.result?.route_plan || currentRoutePlan.value
+    const shopping = getShoppingFromSession(data)
+    if (Object.prototype.hasOwnProperty.call(data || {}, "shopping") || Object.prototype.hasOwnProperty.call(data?.result || {}, "shopping")) {
+      currentShoppingRecommendations.value = shopping
+    }
+  }
+
   function resetSession() {
     sessionId.value = null
     sessionState.value = ""
     currentRoutePlan.value = null
+    currentShoppingRecommendations.value = []
     messages.value = []
     stopTyping()
   }
@@ -138,8 +168,19 @@ export const useChatStore = defineStore("chat", () => {
         sessionState.value = data.state || "done"
         currentStep.value = data.current_step || ""
         currentRoutePlan.value = data.route_plan || data.result?.route_plan || null
+        currentShoppingRecommendations.value = getShoppingFromSession(data)
         showChat.value = true
       }
+    } catch {}
+  }
+
+  async function syncCurrentRoutePlan() {
+    if (!sessionId.value) return
+    try {
+      const res = await fetch(`${API()}/api/session/${sessionId.value}`)
+      if (!res.ok) return
+      const data = await res.json()
+      syncFromPayload(data)
     } catch {}
   }
 
@@ -169,14 +210,19 @@ export const useChatStore = defineStore("chat", () => {
   }
 
   async function send(message: string, lat: number, lng: number) {
-    messages.value.push({ role: "user", content: message })
+    const isConfirmingGeneration = sessionState.value === "confirming" && /^(确认|好的|可以|没问题|ok|yes|对|没错)$/i.test(message.trim())
+    if (isConfirmingGeneration) {
+      messages.value = [{ role: "user", content: message }]
+    } else {
+      messages.value.push({ role: "user", content: message })
+    }
 
     if (!sessionId.value) {
       await startSession()
       messages.value.push({ role: "user", content: message })
     }
 
-    const loadingBase = sessionState.value === "generating"
+    const loadingBase = sessionState.value === "generating" || isConfirmingGeneration
       ? "正在生成推荐方案"
       : "正在查询天气与周边信息"
     const loadingIdx = messages.value.length
@@ -201,7 +247,7 @@ export const useChatStore = defineStore("chat", () => {
         sessionState.value = data.state || sessionState.value
         currentStep.value = data.current_step || currentStep.value
       }
-      currentRoutePlan.value = data.route_plan || data.result?.route_plan || currentRoutePlan.value
+      syncFromPayload(data)
 
       stopLoadingDots()
       messages.value[loadingIdx] = { role: "assistant", content: "" }
@@ -211,6 +257,9 @@ export const useChatStore = defineStore("chat", () => {
       })
 
       if (data.state === "done") {
+        if ((!data.route_plan && !data.result?.route_plan) || !getShoppingFromSession(data).length) {
+          await syncCurrentRoutePlan()
+        }
         await fetchSessions()
       }
     } catch {
@@ -265,6 +314,7 @@ export const useChatStore = defineStore("chat", () => {
     sessionState,
     currentStep,
     currentRoutePlan,
+    currentShoppingRecommendations,
     send,
     startSession,
     loadSession,

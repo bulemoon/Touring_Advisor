@@ -2,7 +2,7 @@
   <div class="chat-section">
     <div class="assistant-card">
       <div class="assistant-kicker">会员专属 AI 管家</div>
-      <div class="assistant-title">您好，我是鹭岛礼宾顾问</div>
+      <div class="assistant-title">您好，我是旅行顾问</div>
       <p class="assistant-copy">
         已根据您当前所在位置，准备好景区解读、路线推荐与周边消费建议。
       </p>

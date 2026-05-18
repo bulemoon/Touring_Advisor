@@ -1,7 +1,7 @@
 <template>
   <div v-if="visible" class="auth-overlay">
     <div class="auth-card">
-      <h2>欢迎使用 AI 旅伴助手</h2>
+      <h2>欢迎使用旅行顾问</h2>
       <p class="auth-subtitle">登录后即可享受个性化旅行服务</p>
       <input v-model="phone" type="tel" placeholder="手机号" class="auth-input" maxlength="11" />
       <div class="code-row">

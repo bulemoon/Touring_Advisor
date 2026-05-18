@@ -579,6 +579,73 @@ def recommend_gear(weather: dict | None, terrain_tags: list[str] = None) -> list
 
 
 # ===== Session 管理 =====
+def normalize_destination_name(text: str) -> str:
+    """Extract a usable destination name from user text."""
+    if not text:
+        return ""
+    known_places = [
+        "北京", "上海", "广州", "深圳", "杭州", "苏州", "南京", "成都", "重庆", "西安",
+        "厦门", "青岛", "大连", "三亚", "海口", "昆明", "丽江", "大理", "长沙", "武汉",
+        "天津", "济南", "福州", "泉州", "宁波", "无锡", "洛阳", "开封", "桂林", "北海",
+        "鼓浪屿", "南普陀", "厦门大学", "曾厝垵", "沙坡尾",
+    ]
+    for place in known_places:
+        if place in text:
+            return "厦门" if place in {"鼓浪屿", "南普陀", "厦门大学", "曾厝垵", "沙坡尾"} else place
+
+    cleaned = re.sub(r"(帮我|安排|规划|推荐|路线|攻略|旅游|旅行|游玩|行程|三日游|两日游|一日游|半日游|周末|附近)", "", text)
+    cleaned = re.sub(r"[，。！？、\s]+", "", cleaned)
+    return cleaned[:12] or text
+
+
+def build_itinerary_shopping(destination: str, summary: str, gear: list[dict]) -> list[dict]:
+    """Build purchasable travel goods and souvenir suggestions for the UI."""
+    items: list[dict] = []
+    seen: set[str] = set()
+
+    def add(name: str, reason: str, keywords: list[str], category: str = "旅行用品", source: str = "itinerary_product"):
+        if name in seen:
+            return
+        seen.add(name)
+        items.append({
+            "name": name,
+            "type": category,
+            "reason": reason,
+            "source": source,
+            "purchase_keywords": keywords,
+            "recommended_products": keywords[:3],
+        })
+
+    text = f"{destination}\n{summary}"
+    hot_or_seaside = any(kw in text for kw in ["厦门", "鼓浪屿", "海", "海岛", "沙滩", "海滨", "三亚", "北海", "青岛"])
+    walking = any(kw in text for kw in ["步道", "爬", "徒步", "暴走", "山", "隧道", "古城", "老城"])
+
+    for g in gear or []:
+        gear_name = str(g.get("name", "")).strip()
+        reason = str(g.get("reason", "")).strip() or "根据天气和行程自动推荐"
+        if gear_name:
+            add(gear_name, reason, [gear_name], "装备建议")
+
+    if hot_or_seaside:
+        add("SPF50+ 防晒霜", "海边和户外拍照时间长，防晒要提前准备。", ["SPF50 防晒霜", "户外防晒霜"], "防晒护理")
+        add("遮阳伞 / 防晒帽", "厦门海边和老城街区遮挡少，遮阳会舒服很多。", ["遮阳伞", "防晒帽", "防晒衣"], "防晒装备")
+        add("便携小风扇", "夏季或午后排队、步行时很实用。", ["便携小风扇", "挂脖风扇"], "降温用品")
+
+    if walking:
+        add("舒适平底鞋", "步行路线多，鞋比造型更影响体验。", ["舒适平底鞋", "旅行徒步鞋"], "穿搭装备")
+        add("轻便双肩包 / 帆布袋", "装水、充电宝和伴手礼更方便。", ["轻便双肩包", "帆布袋"], "收纳用品")
+
+    add("大容量充电宝", "导航、拍照、查攻略都会耗电。", ["大容量充电宝", "快充充电宝"], "数码配件")
+    add("驱蚊水", "傍晚海边、公园和绿道更容易被蚊虫打扰。", ["驱蚊水", "户外驱蚊喷雾"], "护理用品")
+
+    if "厦门" in text or "鼓浪屿" in text:
+        add("南普陀素饼", "适合作为厦门伴手礼，轻便也有地方特色。", ["南普陀素饼", "厦门素饼"], "厦门伴手礼", "souvenir")
+        add("鼓浪屿纪念品", "攻略里有鼓浪屿行程时，可以提前看看明信片、冰箱贴等小物。", ["鼓浪屿纪念品", "厦门冰箱贴", "鼓浪屿明信片"], "纪念品", "souvenir")
+        add("厦门馅饼 / 凤梨酥", "适合带给朋友同事的经典伴手礼。", ["厦门馅饼", "厦门凤梨酥"], "厦门伴手礼", "souvenir")
+
+    return items[:8]
+
+
 class SessionStartResponse(BaseModel):
     session_id: str
     message: str
@@ -819,7 +886,8 @@ async def chat(req: ChatRequest):
             "content": reply,
             "session_id": sid,
             "state": session["state"],
-            "current_step": STEPS[session["step"]] if session["step"] < len(STEPS) else ""
+            "current_step": STEPS[session["step"]] if session["step"] < len(STEPS) else "",
+            "route_plan": (session.get("result") or {}).get("route_plan"),
         }
 
     # 确认阶段：等待用户确认
@@ -855,7 +923,8 @@ async def chat(req: ChatRequest):
             "content": reply,
             "session_id": sid,
             "state": session["state"],
-            "current_step": STEPS[0] if session["state"] == "collecting" else ""
+            "current_step": STEPS[0] if session["state"] == "collecting" else "",
+            "route_plan": (session.get("result") or {}).get("route_plan"),
         }
 
     # 推荐已完成，后续对话
@@ -892,7 +961,7 @@ async def chat(req: ChatRequest):
 def _generate_recommendation(session: dict) -> dict:
     """收集完信息后的推荐生成核心逻辑"""
     inp = session["inputs"]
-    dest = inp["destination"] or ""
+    dest = normalize_destination_name(inp["destination"] or "")
     date = inp["date"] or ""
     residence = inp["residence"] or ""
     duration = inp["duration"] or "1-day"
@@ -1158,6 +1227,7 @@ def _generate_recommendation(session: dict) -> dict:
             attractions.append(item)
 
     route_plan = build_route_plan_from_text(full_reply, attractions, duration)
+    shopping = build_itinerary_shopping(dest, full_reply, gear)
 
     return {
         "summary": full_reply,
@@ -1206,7 +1276,7 @@ async def login(req: LoginRequest):
 
 @app.get("/api/user/profile")
 async def get_profile():
-    return {"id": _FAKE_USER_ID, "phone": "138****8888", "nickname": "旅行者", "avatar_url": ""}
+    return {"id": _FAKE_USER_ID, "phone": "138****8888", "nickname": "旅行顾问", "avatar_url": ""}
 
 
 # ===== Tours =====

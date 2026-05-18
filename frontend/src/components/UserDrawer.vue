@@ -3,9 +3,9 @@
     <div v-if="visible" class="drawer-overlay" @click.self="$emit('close')">
       <div class="drawer">
         <div class="drawer-header">
-          <img :src="avatarUrl || 'https://via.placeholder.com/60'" class="avatar" />
+          <img :src="avatarUrl || '/icons/profile-avatar.svg'" class="avatar" alt="用户头像" />
           <div>
-            <div class="nickname">{{ nickname || "旅行者" }}</div>
+            <div class="nickname">{{ nickname || "旅行顾问" }}</div>
             <div class="phone">{{ phone }}</div>
           </div>
         </div>
